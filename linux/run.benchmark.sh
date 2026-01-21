@@ -7,7 +7,14 @@
 # - Timestamped logs in a single folder
 # - Sequential execution (toggleable if needed)
 
-set -euo pipefail
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+# echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+# watch -n 1 'cat /sys/devices/pci0000:00/0000:00:02.0/tile0/gt0/freq0/act_freq'
+
+# chmod +x run.benchmark.sh
+# nohup bash ./run.benchmark.sh > run.benchmark.out 2>&1
 
 ########################################
 # Config: edit these as needed

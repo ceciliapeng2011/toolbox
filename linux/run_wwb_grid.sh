@@ -1,6 +1,12 @@
 
+
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+# chmod +x run_wwb_grid.sh
+# nohup bash ./run_wwb_grid.sh > run_wwb_grid.out 2>&1 &
+
 
 ############################################
 # User-provided lists (from your base script)

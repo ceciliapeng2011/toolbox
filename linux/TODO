@@ -1,0 +1,111 @@
+echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+nohup bash ./../run_wwb_grid.sh > run_wwb_grid.out 2>&1 && bash ./../run.benchmark.sh > run.benchmark.out 2>&1
+
+
+# 1. Change layout of kvcache block zp+scale, make them contiguous for better memory access pattern.
+# This improves 0.11 density performance by ~6%. from baseline:
+# [total]: PA_causal seq_len=32768 , trunks=1, density 0.11, compressKVCache True, MFU 14,246 GFLOPS, latency: 70.674 ms, meet: 0.47
+# to:
+# [total]: PA_causal seq_len=32768 , trunks=1, density 0.11, compressKVCache True, MFU 17,263 GFLOPS, latency: 58.322 ms, meet: 0.58
+# [total]: PA_causal seq_len=32768 , trunks=1, density 0.11, compressKVCache True, MFU 15,340 GFLOPS, latency: 65.633 ms, meet: 0.51
+# [total]: PA_causal seq_len=32768 , trunks=1, density 0.11, compressKVCache True, MFU 14,890 GFLOPS, latency: 67.617 ms, meet: 0.50
+
+
+# packed bitmask for sparsity, - tried, no significant perf gain.
+# [total]: PA_causal seq_len=32768 , trunks=1, density 0.11, compressKVCache True, MFU 14,154 GFLOPS, latency: 71.135 ms, meet: 0.47
+
+# prefetch gating by block mask, - tried, no significant perf gain in case of 32k prompt with 0.11 density becasue there is no tailing.
+
+# removing tail masking for full blocks only. - Already did for int8 path. Can apply to fp16 path as well.
+
+
+Other options may consider:
+1. Load sparse_mask_base into registers or SLM, and them use the cache in skip_load.
+2. Increase kv_step from 16 to like 32 or 64, to reduce synchronizing overhead. This may involve load the macro step of K/Vs into SLM.
+3. packed bitmask for sparsity,
+
+### TODO
+1. Optimize when sparse_block_sz=128 case.
+2. Optimize the sparse pipeline when there is tailing.
+3. Optimize the fp16 path as well.
+
+
+### Current benchmark results:
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=2 head_size=128 sparse_block_sz=128...
+        Kernel cm_page_attention : 256 registers
+.
+[check_close] torch.Size([32768, 2, 128])torch.float16 vs torch.Size([32768, 2, 128])torch.float16
+[check_close] rtol_max: 802.5
+[check_close] atol_max: 0.00164794921875
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=32 head_size=128 sparse_block_sz=1...
+        Kernel cm_page_attention : 256 registers
+[total]: PA_causal sparse_block_sz=1 seq_len=32768 , num_trunks=1, density req/eff 1.00/1.00, compressKVCache True, MFU 17,906 GFLOPS, latency(ms): min=485.110 avg=491.231 max=501.460, meet: 0.60
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=32 head_size=128 sparse_block_sz=256...
+        Kernel cm_page_attention : 256 registers
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 1.00/1.00, compressKVCache True, MFU 18,166 GFLOPS, latency(ms): min=478.293 avg=484.205 max=494.089, meet: 0.61
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 0.99/0.99, compressKVCache True, MFU 18,525 GFLOPS, latency(ms): min=466.367 avg=470.063 max=475.530, meet: 0.62
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 0.66/0.66, compressKVCache True, MFU 18,739 GFLOPS, latency(ms): min=308.232 avg=309.799 max=311.592, meet: 0.62
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 0.33/0.33, compressKVCache True, MFU 17,708 GFLOPS, latency(ms): min=158.483 avg=163.923 max=182.474, meet: 0.59
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 0.11/0.11, compressKVCache True, MFU 17,203 GFLOPS, latency(ms): min=55.886 avg=56.244 max=56.877, meet: 0.57
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=32 head_size=128 sparse_block_sz=128...
+        Kernel cm_page_attention : 256 registers
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 1.00/1.00, compressKVCache True, MFU 16,585 GFLOPS, latency(ms): min=524.558 avg=530.374 max=541.379, meet: 0.55
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 0.99/0.99, compressKVCache True, MFU 16,561 GFLOPS, latency(ms): min=520.484 avg=525.810 max=535.467, meet: 0.55
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 0.66/0.66, compressKVCache True, MFU 14,398 GFLOPS, latency(ms): min=398.413 avg=403.203 max=410.009, meet: 0.48
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 0.33/0.33, compressKVCache True, MFU 11,717 GFLOPS, latency(ms): min=244.913 avg=247.744 max=251.112, meet: 0.39
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 0.11/0.11, compressKVCache True, MFU 9,998 GFLOPS, latency(ms): min=96.616 avg=96.775 max=96.923, meet: 0.33
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=2 head_size=128 sparse_block_sz=1...
+        Kernel cm_page_attention : 256 registers
+.
+[check_close] torch.Size([32768, 2, 128])torch.float16 vs torch.Size([32768, 2, 128])torch.float16
+[check_close] rtol_max: 802.5
+[check_close] atol_max: 0.00164794921875
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=2 head_size=128 sparse_block_sz=256...
+        Kernel cm_page_attention : 256 registers
+.
+[check_close] torch.Size([32768, 2, 128])torch.float16 vs torch.Size([32768, 2, 128])torch.float16
+[check_close] rtol_max: 802.5
+[check_close] atol_max: 0.00164794921875
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=2 head_size=128 sparse_block_sz=128...
+        Kernel cm_page_attention : 256 registers
+.
+[check_close] torch.Size([32768, 2, 128])torch.float16 vs torch.Size([32768, 2, 128])torch.float16
+[check_close] rtol_max: 802.5
+[check_close] atol_max: 0.00164794921875
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=32 head_size=128 sparse_block_sz=1...
+        Kernel cm_page_attention : 256 registers
+[total]: PA_causal sparse_block_sz=1 seq_len=32768 , num_trunks=8, density req/eff 1.00/1.00, compressKVCache True, MFU 17,920 GFLOPS, latency(ms): min=487.018 avg=490.862 max=495.095, meet: 0.60
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=32 head_size=128 sparse_block_sz=256...
+        Kernel cm_page_attention : 256 registers
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=8, density req/eff 1.00/1.00, compressKVCache True, MFU 18,028 GFLOPS, latency(ms): min=483.389 avg=487.910 max=492.009, meet: 0.60
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=8, density req/eff 0.99/0.99, compressKVCache True, MFU 18,397 GFLOPS, latency(ms): min=467.525 avg=473.338 max=480.022, meet: 0.61
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=8, density req/eff 0.66/0.66, compressKVCache True, MFU 18,728 GFLOPS, latency(ms): min=308.360 avg=309.984 max=311.974, meet: 0.62
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=8, density req/eff 0.33/0.33, compressKVCache True, MFU 18,086 GFLOPS, latency(ms): min=160.396 avg=160.492 max=160.569, meet: 0.60
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=8, density req/eff 0.11/0.11, compressKVCache True, MFU 16,808 GFLOPS, latency(ms): min=57.226 avg=57.567 max=58.007, meet: 0.56
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=32 head_size=128 sparse_block_sz=128...
+        Kernel cm_page_attention : 256 registers
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=8, density req/eff 1.00/1.00, compressKVCache True, MFU 16,562 GFLOPS, latency(ms): min=528.052 avg=531.114 max=535.375, meet: 0.55
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=8, density req/eff 0.99/0.99, compressKVCache True, MFU 16,532 GFLOPS, latency(ms): min=524.374 avg=526.744 max=529.736, meet: 0.55
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=8, density req/eff 0.66/0.66, compressKVCache True, MFU 14,543 GFLOPS, latency(ms): min=397.137 avg=399.184 max=402.464, meet: 0.48
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=8, density req/eff 0.33/0.33, compressKVCache True, MFU 11,816 GFLOPS, latency(ms): min=244.362 avg=245.663 max=246.616, meet: 0.39
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=8, density req/eff 0.11/0.11, compressKVCache True, MFU 9,868 GFLOPS, latency(ms): min=97.527 avg=98.049 max=99.070, meet: 0.33
+
+
+
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=32 head_size=128 sparse_block_sz=1...
+        Kernel cm_page_attention : 255 registers
+[total]: PA_causal sparse_block_sz=1 seq_len=32768 , num_trunks=1, density req/eff 1.00/1.00, compressKVCache False, MFU 18,158 GFLOPS, latency(ms): min=482.751 avg=484.413 max=485.948, meet: 0.61
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=32 head_size=128 sparse_block_sz=256...
+        Kernel cm_page_attention : 255 registers
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 1.00/1.00, compressKVCache False, MFU 17,913 GFLOPS, latency(ms): min=488.621 avg=491.033 max=492.098, meet: 0.60
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 0.99/0.99, compressKVCache False, MFU 17,911 GFLOPS, latency(ms): min=484.143 avg=486.190 max=487.209, meet: 0.60
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 0.66/0.66, compressKVCache False, MFU 17,476 GFLOPS, latency(ms): min=295.944 avg=332.203 max=355.973, meet: 0.58
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 0.33/0.33, compressKVCache False, MFU 16,022 GFLOPS, latency(ms): min=178.903 avg=181.165 max=185.390, meet: 0.53
+[total]: PA_causal sparse_block_sz=256 seq_len=32768 , num_trunks=1, density req/eff 0.11/0.11, compressKVCache False, MFU 7,747 GFLOPS, latency(ms): min=123.902 avg=124.896 max=126.221, meet: 0.26
+compiling /home/ceciliapeng/OCL/aboutSHW/opencl/tests/pageatten num_heads=32 head_size=128 sparse_block_sz=128...
+        Kernel cm_page_attention : 255 registers
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 1.00/1.00, compressKVCache False, MFU 18,042 GFLOPS, latency(ms): min=483.952 avg=487.534 max=493.337, meet: 0.60
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 0.99/0.99, compressKVCache False, MFU 17,854 GFLOPS, latency(ms): min=485.667 avg=487.753 max=489.486, meet: 0.60
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 0.66/0.66, compressKVCache False, MFU 15,834 GFLOPS, latency(ms): min=359.272 avg=366.639 max=370.096, meet: 0.53
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 0.33/0.33, compressKVCache False, MFU 12,884 GFLOPS, latency(ms): min=223.653 avg=225.302 max=227.107, meet: 0.43
+[total]: PA_causal sparse_block_sz=128 seq_len=32768 , num_trunks=1, density req/eff 0.11/0.11, compressKVCache False, MFU 6,697 GFLOPS, latency(ms): min=143.874 avg=144.476 max=145.595, meet: 0.22

@@ -15,8 +15,8 @@ pip uninstall openvino -y
 pip uninstall openvino-genai -y
 pip uninstall openvino-tokenizers -y
 
-wget -r -l 0 -nH --cut-dirs=1  --no-parent --reject="index.html*" --no-check-certificate https://10-211-120-125.iotg.sclab.intel.com/openvino_ci/private_builds/dldt/master/pre_commit/a1b941784abf61320fad77be7a981e46f6b34665/private_linux_ubuntu_24_04_release/wheels/openvino-2026.1.0.dev20260210-20691-cp312-cp312-manylinux_2_39_x86_64.whl
-wget -r -l 0 -nH --cut-dirs=1  --no-parent --reject="index.html*" --no-check-certificate https://10-211-120-125.iotg.sclab.intel.com/openvino_ci/private_builds/dldt/master/pre_commit/a1b941784abf61320fad77be7a981e46f6b34665/private_linux_ubuntu_24_04_release/wheels/openvino_genai-2026.1.0.0.dev20260210-2097-cp312-cp312-linux_x86_64.whl
-wget -r -l 0 -nH --cut-dirs=1  --no-parent --reject="index.html*" --no-check-certificate https://10-211-120-125.iotg.sclab.intel.com/openvino_ci/private_builds/dldt/master/pre_commit/a1b941784abf61320fad77be7a981e46f6b34665/private_linux_ubuntu_24_04_release/wheels/openvino_tokenizers-2026.1.0.0.dev20260210-534-py3-none-linux_x86_64.whl
+wget -r -l 0 -nH --cut-dirs=1  --no-parent --reject="index.html*" --no-check-certificate https://10-211-120-125.iotg.sclab.intel.com/openvino_ci/private_builds/dldt/master/pre_commit/9d3d159df27de414cf69cf140783531f57503df7/private_linux_ubuntu_24_04_release/wheels/openvino-2026.1.0.dev20260224-20694-cp312-cp312-manylinux_2_39_x86_64.whl
+wget -r -l 0 -nH --cut-dirs=1  --no-parent --reject="index.html*" --no-check-certificate https://10-211-120-125.iotg.sclab.intel.com/openvino_ci/private_builds/dldt/master/pre_commit/9d3d159df27de414cf69cf140783531f57503df7/private_linux_ubuntu_24_04_release/wheels/openvino_genai-2026.1.0.0.dev20260224-2124-cp312-cp312-linux_x86_64.whl
+wget -r -l 0 -nH --cut-dirs=1  --no-parent --reject="index.html*" --no-check-certificate https://10-211-120-125.iotg.sclab.intel.com/openvino_ci/private_builds/dldt/master/pre_commit/9d3d159df27de414cf69cf140783531f57503df7/private_linux_ubuntu_24_04_release/wheels/openvino_tokenizers-2026.1.0.0.dev20260224-538-py3-none-linux_x86_64.whl
 
-pip install private_builds/dldt/master/pre_commit/a1b941784abf61320fad77be7a981e46f6b34665/private_linux_ubuntu_24_04_release/wheels/openvino*.whl
+pip install private_builds/dldt/master/pre_commit/9d3d159df27de414cf69cf140783531f57503df7/private_linux_ubuntu_24_04_release/wheels/openvino*.whl

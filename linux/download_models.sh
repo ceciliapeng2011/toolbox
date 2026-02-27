@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# MODEL_CACHE_URL="https://ov-share-13.iotg.sclab.intel.com/cv_bench_cache/WW02_llm-optimum_2026.0.0-20769"
+# MODEL_CACHE_URL="https://ov-share-13.iotg.sclab.intel.com/cv_bench_cache/WW05_llm-optimum_2026.0.0-20769"
 # GT_CACHE_URL="https://ov-share-04.sclab.intel.com/cv_bench_cache/AC_llm/wwb_ref_gt_data_cache/2026.0.0-20769-87b915269ed_nat_ref/CPU_ICX/default_data_wwb_long_prompt/cache_nat_refs_cli___long_prompt/"
 
 # MODEL_DIRS=(
@@ -30,8 +30,11 @@ set -euo pipefail
 ########################################
 # Config
 ########################################
-MODEL_CACHE_URL="https://ov-share-13.iotg.sclab.intel.com/cv_bench_cache/WW02_llm-optimum_2026.0.0-20769"
-GT_CACHE_URL="https://ov-share-04.sclab.intel.com/cv_bench_cache/AC_llm/wwb_ref_gt_data_cache/2026.0.0-20769-87b915269ed_nat_ref/CPU_ICX/default_data_wwb_long_prompt/cache_nat_refs_cli___long_prompt/"
+MODEL_CACHE_URL="https://ov-share-13.iotg.sclab.intel.com/cv_bench_cache/WW05_llm-optimum_2026.0.0-20947"
+# 17 samples
+# GT_CACHE_URL="https://ov-share-04.sclab.intel.com/cv_bench_cache/AC_llm/wwb_ref_gt_data_cache/2026.0.0-20947-08aa357021e-releases_2026_0_nat_ref/CPU_ICX/default_data_wwb_long_prompt/cache_nat_refs_cli___long_prompt/"
+# 26 samples
+GT_CACHE_URL="https://ov-share-04.sclab.intel.com/cv_bench_cache/AC_llm/wwb_ref_gt_data_cache/2026.1.0-21072-41d3cef274f_nat_ref/CPU_ICX/default_data_wwb_long_prompt/cache_nat_refs_cli___long_prompt/"
 
 MODEL_DIRS=(
   "qwen3-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT"
@@ -46,11 +49,17 @@ REF_DIRS=(
 )
 
 # Where to store logs and downloads (customize if needed)
-DOWNLOAD_ROOT="${PWD}/llm_irs"
-LOG_ROOT="${PWD}/logs"
+DOWNLOAD_ROOT="${HOME}/llm_irs"
+LOG_ROOT="${HOME}/llm_irs/logs"
 
 # Execution mode: set to "sequential" or "background"
 EXEC_MODE="sequential"  # change to "background" to run in parallel
+
+# Download mode arg:
+#   0 or empty: download both models and refs
+#   1: models only
+#   2: refs only
+DOWNLOAD_MODE="${1:-0}"
 
 ########################################
 # Setup
@@ -65,6 +74,16 @@ if ! command -v wget >/dev/null 2>&1; then
   echo "[ERROR] wget not found. Install it and retry."
   exit 1
 fi
+
+case "${DOWNLOAD_MODE}" in
+  0|1|2)
+    ;;
+  *)
+    echo "[ERROR] Invalid download mode: ${DOWNLOAD_MODE}"
+    echo "        Use 0 (both), 1 (models only), or 2 (refs only)."
+    exit 1
+    ;;
+esac
 
 ########################################
 # Disable proxies for this script
@@ -97,10 +116,24 @@ download_dir() {
   # Full URL (ensure trailing slash)
   local url="${base_url%/}/${rel_dir%/}/"
 
-  # Output subfolder: use last segment of rel_dir
-  local tail="${rel_dir##*/}"
-  #  local out_dir="${DOWNLOAD_ROOT}/${category}/${tail}"
-  local out_dir="${DOWNLOAD_ROOT}"
+  # Count base_url path segments for --cut-dirs
+  local base_path="${base_url#*://}"
+  base_path="${base_path#*/}"
+  base_path="${base_path%/}"
+  local cut_dirs=0
+  if [[ -n "${base_path}" ]]; then
+    local -a base_parts
+    IFS='/' read -r -a base_parts <<< "${base_path}"
+    cut_dirs="${#base_parts[@]}"
+  fi
+
+  # Output directory
+  local out_dir
+  if [[ "${category}" == "gt" ]]; then
+    out_dir="${DOWNLOAD_ROOT}/AC_llm/wwb_ref_gt_data_cache"
+  else
+    out_dir="${DOWNLOAD_ROOT}"
+  fi
 
   # Log file name encodes category and sanitized rel_dir
   local rel_id
@@ -120,7 +153,7 @@ download_dir() {
   local cmd=(
     wget -r -l 0
     --no-parent
-    -nH --cut-dirs=1
+    -nH --cut-dirs="${cut_dirs}"
     --reject "index.html*"
     --no-check-certificate
     "${WGET_NO_PROXY_OPT}"
@@ -145,14 +178,18 @@ download_dir() {
 ########################################
 
 # Models
-for rel in "${MODEL_DIRS[@]}"; do
-  download_dir "${MODEL_CACHE_URL}" "${rel}" "model"
-done
+if [[ "${DOWNLOAD_MODE}" == "0" || "${DOWNLOAD_MODE}" == "1" ]]; then
+  for rel in "${MODEL_DIRS[@]}"; do
+    download_dir "${MODEL_CACHE_URL}" "${rel}" "model"
+  done
+fi
 
 # GT refs
-for rel in "${REF_DIRS[@]}"; do
-  download_dir "${GT_CACHE_URL}" "${rel}" "gt"
-done
+if [[ "${DOWNLOAD_MODE}" == "0" || "${DOWNLOAD_MODE}" == "2" ]]; then
+  for rel in "${REF_DIRS[@]}"; do
+    download_dir "${GT_CACHE_URL}" "${rel}" "gt"
+  done
+fi
 
 # If background mode, you can optionally wait for PIDs recorded in logs/pids.<TS>.txt
 if [[ "${EXEC_MODE}" == "background" ]]; then

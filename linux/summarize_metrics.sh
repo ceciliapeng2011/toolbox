@@ -25,6 +25,7 @@
 set -eu
 
 ROOT_DIR="${1:-.}"
+echo $ROOT_DIR
 OUT_SUMMARY="${2:-metrics_summary.csv}"
 OUT_FAILURES="${3:-metrics_failures.csv}"
 

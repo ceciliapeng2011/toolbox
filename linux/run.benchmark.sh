@@ -21,15 +21,15 @@ IFS=$'\n\t'
 ########################################
 
 MODEL_DIRS=(
-  "$HOME/llm_irs/WW02_llm-optimum_2026.0.0-20769/qwen3-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT"
-  "$HOME/llm_irs/WW02_llm-optimum_2026.0.0-20769/minicpm4-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT"
-  "$HOME/llm_irs/WW02_llm-optimum_2026.0.0-20769/phi-3-mini-128k-instruct/pytorch/ov/OV_FP16-4BIT_DEFAULT"
+  "$HOME/llm_irs/WW05_llm-optimum_2026.0.0-20947/qwen3-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT"
+  "$HOME/llm_irs/WW05_llm-optimum_2026.0.0-20947/minicpm4-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT"
+  "$HOME/llm_irs/WW05_llm-optimum_2026.0.0-20947/phi-3-mini-128k-instruct/pytorch/ov/OV_FP16-4BIT_DEFAULT"
 )
 
 PROMPT_FILES=(
-  "$HOME/3rdparty/x-attention/eval/efficiency/xattn-102.jsonl"
-  "$HOME/3rdparty/x-attention/eval/efficiency/xattn-1265.jsonl"
-  "$HOME/3rdparty/x-attention/eval/efficiency/xattn-4096.jsonl"
+  # "$HOME/3rdparty/x-attention/eval/efficiency/xattn-102.jsonl"
+  # "$HOME/3rdparty/x-attention/eval/efficiency/xattn-1265.jsonl"
+  # "$HOME/3rdparty/x-attention/eval/efficiency/xattn-4096.jsonl"
   "$HOME/3rdparty/x-attention/eval/efficiency/xattn-32768.jsonl"
 )
 

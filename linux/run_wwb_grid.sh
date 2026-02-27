@@ -12,12 +12,12 @@ IFS=$'\n\t'
 # User-provided lists (from your base script)
 ############################################
 MODEL_DIRS=(
-  "$HOME/llm_irs/WW02_llm-optimum_2026.0.0-20769/qwen3-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT"
-  "$HOME/llm_irs/WW02_llm-optimum_2026.0.0-20769/minicpm4-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT"
-  "$HOME/llm_irs/WW02_llm-optimum_2026.0.0-20769/phi-3-mini-128k-instruct/pytorch/ov/OV_FP16-4BIT_DEFAULT"
+  "$HOME/llm_irs/WW05_llm-optimum_2026.0.0-20947/qwen3-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT"
+  "$HOME/llm_irs/WW05_llm-optimum_2026.0.0-20947/minicpm4-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT"
+  "$HOME/llm_irs/WW05_llm-optimum_2026.0.0-20947/phi-3-mini-128k-instruct/pytorch/ov/OV_FP16-4BIT_DEFAULT"
 )
 
-GT_DIR=$HOME/llm_irs/AC_llm/wwb_ref_gt_data_cache/2026.0.0-20769-87b915269ed_nat_ref/CPU_ICX/default_data_wwb_long_prompt/cache_nat_refs_cli___long_prompt
+GT_DIR=$HOME/llm_irs/AC_llm/wwb_ref_gt_data_cache/
 GT_FILES=(
   "$GT_DIR/qwen3-8b__NAT/reference.csv"
   "$GT_DIR/minicpm4-8b__NAT/reference.csv"

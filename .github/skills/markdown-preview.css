@@ -1,0 +1,16 @@
+body {
+  background: #1b1f24 !important;
+  color: #d7dde5 !important;
+}
+.markdown-body {
+  background: #1b1f24 !important;
+  color: #d7dde5 !important;
+}
+.markdown-body pre {
+  background: #11161c !important;
+  border: 1px solid #2b3440;
+}
+.markdown-body code {
+  background: #27303a !important;
+  color: #e6edf3 !important;
+}

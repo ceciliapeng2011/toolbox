@@ -79,33 +79,64 @@ cd /home/ceciliapeng/openvino.genai/build/bin && ./continuous_batching_benchmark
 - [openvino.genai/src/cpp/src/continuous_batching/block_manager.hpp](openvino.genai/src/cpp/src/continuous_batching/block_manager.hpp#L1105-L1158)
 - [openvino.genai/src/cpp/src/sequence_group.cpp](openvino.genai/src/cpp/src/sequence_group.cpp#L12-L99)
 
-## PagedAttention stage and kernel selection skills
 
-### Stage decision (Intel GPU)
+## Paged Attention specification summary (for CB)
 
-- `PagedAttentionStage::GENERATE` when `query_shape[0] == past_lens_shape[0]`.  【i.e. `batch_size_in_tokens == batch_size_in_sequences`, which means every sequence has 1 input token in query.】
-- `PagedAttentionStage::MIXED` when shapes differ and any `past_lens` value is non‑zero.
-- `PagedAttentionStage::PREFILL` when shapes differ and all `past_lens` values are zero.
+### Basic terms
 
-Reference: [openvino/src/plugins/intel_gpu/src/graph/impls/ocl_v2/sdpa/paged_attention_opt.cpp](openvino/src/plugins/intel_gpu/src/graph/impls/ocl_v2/sdpa/paged_attention_opt.cpp#L215-L241)
+- `batch_size_in_sequences`: number of active sequences in current PA call.
+- `prompt_lens`: scheduled token count per sequence (current step/chunk).
+- `batch_size_in_tokens = sum(prompt_lens)`.
+- `max_context_len = max(context_lens)`.
+- `max_num_blocks = div_up(max_context_len, BLOCK_SIZE)`.
+- `num_blocks`: total entries in `block_indices` for the current batch.
 
-### Kernel selection (micro SDPA enabled)
+### Core requirements
 
-- PREFILL → `sdpa_micro__prefill`
-- MIXED → `sdpa_micro__generate` (mixed path)
-- GENERATE → `sdpa_micro__gqa_single_token` only when GQA micro conditions are met; otherwise non‑micro single‑token kernels are used [i.e. `paged_attention_opt__single_token`].
+- Compute multiple prompts **without padding**.
+- Use flattened token batch (`[batch_size_in_tokens, ...]`) instead of `[N, S, ...]`.
+- Support mixed execution: prompt chunks and decode tokens in the same call.
+- Support per-sequence variable `prompt_len`.
+- Support speculative decode, chunked prefill, and partial recompute after eviction.
+- Support cases where both `prompt_len > 1` and `context_len > 1` (not only pure prefill/decode).
+- Support KV eviction where block tables can differ per decoder layer (layer-aware slot/block mapping).
 
-GQA micro conditions (GENERATE stage):
+### inputs semantic summary
+#### Main PA inputs
 
-- `kv_group_size == 8` and `k_head_size == 64`.
-- When not met, micro SDPA is disabled for GENERATE.
+- `[0] query`: `[batch_size_in_tokens, num_heads * head_size]`
+- `[1] key`: `[batch_size_in_tokens, num_kv_heads * head_size]`
+- `[2] value`: `[batch_size_in_tokens, num_kv_heads * head_size]`
+- `[3] key_cache`: `[num_blocks, num_kv_heads, block_size, head_size]`
+- `[4] value_cache`: `[num_blocks, num_kv_heads, block_size, head_size]`
+	- Note: cache inner layout can be HW/plugin specific.
 
-Reference: [openvino/src/plugins/intel_gpu/src/graph/impls/ocl_v2/sdpa/paged_attention_opt.cpp](openvino/src/plugins/intel_gpu/src/graph/impls/ocl_v2/sdpa/paged_attention_opt.cpp#L1344-L1354)
+#### Sequence state inputs
 
-### Kernel selection (micro SDPA disabled)
+- `[5] past_lens` (`i32`, `[batch_size_in_sequences]`):
+	- per-sequence past KV length.
+	- if `prompt_len > 1`, corresponds to the first token in that sequence subgroup.
 
-- PREFILL → `sdpa_opt__multi_tokens`
-- MIXED → `paged_attention_opt__multi_tokens` (+ `paged_attention_opt__multi_tokens_finalization` when partitions > 1)
-- GENERATE → `paged_attention_opt__single_token` or `paged_attention_opt__gqa_single_token` (+ finalization when partitions > 1)
+- `[6] subsequence_begins` (`i32`, `[batch_size_in_sequences + 1]`):
+	- start offsets of each sequence subgroup in flattened token batch.
+	- used for chunked prompt, recompute, speculative multi-token scheduling.
+	- note: vLLM often provides cumulative `subquery_lens` with same shape.
 
-Reference: [openvino/src/plugins/intel_gpu/src/graph/impls/ocl_v2/sdpa/paged_attention_opt.cpp](openvino/src/plugins/intel_gpu/src/graph/impls/ocl_v2/sdpa/paged_attention_opt.cpp#L1386-L1410)
+#### Block table inputs
+
+- `[7] block_indices` (`i32`, `[num_blocks]`):
+	- physical block IDs into cache tensors (0th dim indices).
+
+- `[8] block_indices_begins` (`i32`, `[batch_size_in_sequences + 1]`):
+	- start offset in `block_indices` per sequence.
+
+Rules:
+- blocks of each sequence are contiguous inside `block_indices` (no gaps per sequence segment).
+- includes both past-filled and newly reserved/partially-filled blocks.
+- with eviction, block tables can differ across decoder layers.
+
+#### Others 
+- `[12] max_context_len`
+    - Scalar `i32`, originally tied to attention matrix sizing.
+    - Usually equals `max(past_lens + prompt_lens)`.
+    - Can be derived by plugin from sequence metadata; candidate for eventual removal.

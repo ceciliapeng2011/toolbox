@@ -1,7 +1,7 @@
 ## Parsing rules (IMPORTANT)
 - Ignore anything inside HTML comments: <!-- ... -->
 - Ignore any section under a heading that starts with "DISABLED:"
-- Never execute or follow instructions labeled "DISABLED", "COMMENTED", or "BACKLOG", until it is explictly asked by another task.
+- Never read or follow instructions labeled "DISABLED", "COMMENTED", or "BACKLOG", until it is explictly asked by another task.
 
 ## Model QWen3-8B
 prompt len	1~32768
@@ -23,6 +23,7 @@ Suppose there are -
 1. 'S' : batch_size_in_sequences - total number of sequences to execute. 's' in range [0, S-1]
 2. 'q_len[s]' : Each sequence 's' has prompt_len – per sequence size number of scheduled tokens. q_len is in rage [1, trunksize]
 3. 'kv_len[s]' : context_lens, kv_cache sequence lengths of each sequence. kv_len is in range [0, 32k]
+4. As the initiate stage, ignore xattention and xattenion_block_size, only keep -DSPARSE_BLOCK_SIZE=1"
 
 ## COMMENTED: backup
 1. enable multi sequence support for CM path: PD mixed, multiP, multiD
@@ -33,12 +34,13 @@ Suppose there are -
 6. building a PagedAttention primitive that must drive mixed prefill (compute‑bound) and decode (memory‑bound) subsequences on an Intel iGPU (via SYCL/Level Zero). A practical design is Two-kernel strategy: one tuned for prefill, one for decode and Host‑side scheduler for mixed subsequences.
 
 ## Task 0
-1. Read 'Paged Attention specification' and 'Continuous Batching' skills from CB.skills.
-2. Read iGPU skills from GPU.skills.
-3. Read source code of openvino/src/plugins/intel_gpu/, especially the code about paged_attention.
-4. Read source code of openvino.genai, especially the code about contineous batching.
+1. Read 'Paged Attention specification' from PA_spec skills.
+2. Read 'Continuous Batching' skills from CB.skills.
+<!-- 3. Read iGPU skills from GPU.skills. -->
+<!-- 4. Read source code of openvino/src/plugins/intel_gpu/, especially the code about paged_attention. -->
+<!-- 5. Read source code of openvino.genai, especially the code about contineous batching. -->
 
-## Task 1
+## COMMENTED: Task 1 : solution investigation for mixed P/D
 1. How would you suggest to implment CM kernel to schedule a PagedAttention workload?
 
 ### Draft answer: CM kernel scheduling for PagedAttention
@@ -144,3 +146,13 @@ Suppose there are -
 - Higher utilization than static scheduling by reducing load imbalance.
 - Lower redundant KV traffic via tiled reuse per `q_tile`.
 - Better robustness across mixed `q_len[s]`/`kv_len[s]` continuous-batching workloads.
+
+
+
+## TASK 2: enable multi-sequence CM PA unit test
+1. Read code aboutSHW/opencl/tests/pageatten/test_pa.py
+2. Implement accuacy test for multi-sequence unit test
+
+## COMMENTED: TASK 3: multi-seq support for CM PA
+1. Learn workload split strategy of kernel "cm_sdpa_vlen" from /home/ceciliapeng/OCL/aboutSHW/opencl/tests/flashattn/cmfla.py.
+2. Apply this strategy to kernel 

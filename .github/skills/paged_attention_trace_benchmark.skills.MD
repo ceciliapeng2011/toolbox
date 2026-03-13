@@ -1,4 +1,8 @@
-# PagedAttention CLIntercept Benchmark Skill
+---
+name: Continuous Batching
+description: PagedAttention CLIntercept Benchmark Skill.
+---
+
 
 ## Goal
 Benchmark `smoke_paged_attention_perf_ocl` and `smoke_paged_attention_perf_cm`, keep per-case CLIntercept traces, extract PA kernel timings, and compute speedups.
@@ -38,21 +42,7 @@ Use OCL as baseline per `case_idx`.
 ## `run.sh` as in-place command
 
 ```bash
-cat > run.sh <<'SH'
-dump_base=./dump
-mkdir -p "$dump_base"
-
-cl_cache_dir=/home/ceciliapeng/.cache/cl_cache cliloader -cdt --dump-dir "$dump_base/ocl_basic_0" ./bin/intel64/Release/ov_gpu_unit_tests --gtest_filter=smoke_paged_attention_perf_ocl/paged_attention_test.basic/0 --gtest_repeat=3 --gtest_color=no
-cl_cache_dir=/home/ceciliapeng/.cache/cl_cache cliloader -cdt --dump-dir "$dump_base/ocl_basic_1" ./bin/intel64/Release/ov_gpu_unit_tests --gtest_filter=smoke_paged_attention_perf_ocl/paged_attention_test.basic/1 --gtest_repeat=3 --gtest_color=no
-cl_cache_dir=/home/ceciliapeng/.cache/cl_cache cliloader -cdt --dump-dir "$dump_base/ocl_basic_2" ./bin/intel64/Release/ov_gpu_unit_tests --gtest_filter=smoke_paged_attention_perf_ocl/paged_attention_test.basic/2 --gtest_repeat=3 --gtest_color=no
-
-cl_cache_dir=/home/ceciliapeng/.cache/cm_cache cliloader -cdt --dump-dir "$dump_base/cm_basic_0" ./bin/intel64/Release/ov_gpu_unit_tests --gtest_filter=smoke_paged_attention_perf_cm/xattention_test.basic/0 --gtest_repeat=3 --gtest_color=no
-cl_cache_dir=/home/ceciliapeng/.cache/cm_cache cliloader -cdt --dump-dir "$dump_base/cm_basic_1" ./bin/intel64/Release/ov_gpu_unit_tests --gtest_filter=smoke_paged_attention_perf_cm/xattention_test.basic/1 --gtest_repeat=3 --gtest_color=no
-cl_cache_dir=/home/ceciliapeng/.cache/cm_cache cliloader -cdt --dump-dir "$dump_base/cm_basic_2" ./bin/intel64/Release/ov_gpu_unit_tests --gtest_filter=smoke_paged_attention_perf_cm/xattention_test.basic/2 --gtest_repeat=3 --gtest_color=no
-SH
-
-chmod +x run.sh
-bash ./run.sh
+pa_benchmark_trace.sh
 ```
 
 ---

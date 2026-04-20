@@ -59,6 +59,18 @@ Commandline:
 cd /home/ceciliapeng/openvino.genai/build/bin && ./continuous_batching_benchmark --device GPU -m $HOME/llm_irs/WW05_llm-optimum_2026.0.0-20947/qwen3-8b/pytorch/ov/OV_FP16-4BIT_DEFAULT --cache_size 4 -n 2 --dataset /home/ceciliapeng/llm_irs/ShareGPT_V3_unfiltered_cleaned_split1.json
 ```
 
+## Benchmark metrics Q&A
+
+- **Q: Refer to `openvino.genai/tools/continuous_batching/benchmark/continuous_batching_benchmark.cpp` and explain how `input_throughput`, `output_throughput`, `mean_ttft`, and `mean_tpot` are calculated.**  
+	**A:**
+	- `input_throughput` = total input tokens across all finished requests / benchmark duration in seconds.
+	- `output_throughput` = total output tokens across all finished requests / benchmark duration in seconds.
+	- Per sequence, `ttft` is measured from request start time to the first readable token.
+	- Per sequence, `mean_tpot` is computed from inter-token read gaps after the first token: cumulative inter-token time divided by emitted-token count after the first token.
+	- Per request (`GenerationInfo`), sequence-level `ttft`/`mean_tpot` are averaged over all sequence IDs in that request.
+	- Final reported `mean_ttft` and `mean_tpot` are the average of per-request means over all requests tracked by `GenerationInfoCollector`.
+	- Source references: metric accumulation/printing in `print_statistics()` and sequence timing updates in `SequenceInfo::update()`.
+
 ## enable_prefix_caching skills
 
 ### What it does

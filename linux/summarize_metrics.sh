@@ -17,7 +17,7 @@
 # Notes:
 # - Requires gawk (for FPAT, ENDFILE, associative arrays).
 # - CSV parsing is quote-aware; handles BOM and CRLF.
-# - Context columns in summary: model_name, run_ts, ov_variant, cb_variant, rel_path
+# - Context columns in summary: model_name, ov_variant, cb_variant, ...metrics..., rel_path
 # - Failures compare sparse-xattention similarity to dense baseline (same group):
 #   Failure if: sparse_similarity <= dense_similarity - 0.1
 #   Dense matching: prefer same mtoks; else highest-sim dense in group.
@@ -61,10 +61,9 @@ fi
 
     # Fixed context columns for summary
     ctx_cols[1] = "model_name"
-    ctx_cols[2] = "run_ts"
-    ctx_cols[3] = "ov_variant"
-    ctx_cols[4] = "cb_variant"
-    ctx_cols[5] = "rel_path"
+    ctx_cols[2] = "ov_variant"
+    ctx_cols[3] = "cb_variant"
+    ctx_cols_count = 3
 
     file_idx = 0
     header_count = 0
@@ -79,11 +78,19 @@ fi
 
     delete file_hdr
     for (i = 1; i <= NF; i++) {
-      file_hdr[i] = $i
-      if (!( ($i) in seen_header)) {
-        seen_header[$i] = 1
+      key = $i
+      file_hdr[i] = key
+
+      # Some metrics.csv files start with a leading comma, e.g. ",similarity".
+      # Ignore empty header keys to avoid creating a blank column in output.
+      if (key == "") {
+        continue
+      }
+
+      if (!(key in seen_header)) {
+        seen_header[key] = 1
         header_count++
-        headers[header_count] = $i
+        headers[header_count] = key
       }
     }
 
@@ -105,12 +112,23 @@ fi
   ENDFILE {
     file_idx++
 
-    # Path parts: <model>/<run_ts>/<ov>/<cb>/metrics.csv
+    # Path tail parsing (robust to optional prefixes), expected suffix:
+    #   .../<model>/<run_ts>/<ov_variant>/<cb_variant>/metrics.csv
+    # Some legacy layouts may omit <run_ts>: .../<model>/<ov_variant>/<cb_variant>/metrics.csv
     n = split(FILENAME, p, "/")
-    model = (n >= 1 ? p[1] : "")
-    runts = (n >= 2 ? p[2] : "")
-    ov    = (n >= 3 ? p[3] : "")
-    cb    = (n >= 4 ? p[4] : "")
+    model = ""
+    runts = ""
+    ov    = (n >= 3 ? p[n-2] : "")
+    cb    = (n >= 2 ? p[n-1] : "")
+
+    # Prefer explicit timestamp match to avoid shifting columns incorrectly.
+    if (n >= 5 && p[n-3] ~ /^[0-9]{8}_[0-9]{6}$/) {
+      runts = p[n-3]
+      model = p[n-4]
+    } else if (n >= 4) {
+      # Fallback for layouts without run_ts
+      model = p[n-3]
+    }
     rel   = FILENAME
 
     # Persist context
@@ -123,6 +141,9 @@ fi
     # Build per-file key->value map from header and last row
     for (i = 1; i <= last_nf; i++) {
       key = file_hdr[i]
+      if (key == "") {
+        continue
+      }
       vals[file_idx, key] = last_vals[i]
     }
 
@@ -159,24 +180,24 @@ fi
     # --------- Summary Output (to stdout) ---------
     # Header
     out = ""
-    for (i = 1; i <= 5; i++) { out = out ((i==1) ? "" : OFS) ctx_cols[i] }
+    for (i = 1; i <= ctx_cols_count; i++) { out = out ((i==1) ? "" : OFS) ctx_cols[i] }
     for (h = 1; h <= header_count; h++) { out = out OFS headers[h] }
+    out = out OFS "rel_path"
     print out
 
     # Rows
     for (fi = 1; fi <= file_idx; fi++) {
       row = ""
       row = row csv_escape(ctx_model[fi])
-      row = row OFS csv_escape(ctx_runts[fi])
       row = row OFS csv_escape(ctx_ov[fi])
       row = row OFS csv_escape(ctx_cb[fi])
-      row = row OFS csv_escape(ctx_rel[fi])
 
       for (h = 1; h <= header_count; h++) {
         key = headers[h]
         v = ((fi, key) in vals) ? vals[fi, key] : ""
         row = row OFS csv_escape(v)
       }
+      row = row OFS csv_escape(ctx_rel[fi])
       print row
     }
 

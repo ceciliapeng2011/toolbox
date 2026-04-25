@@ -54,12 +54,45 @@ INFER_COUNT=10
 # Derived variables
 ########################################
 TS="$(date +"%Y%m%d_%H%M%S")"
-LOG_DIR="./logs.benchmark_${TS}"
+
+readarray -t _VERS < <(python - <<'PY'
+def get_openvino_version():
+  try:
+    import openvino
+    return str(openvino.get_version())
+  except Exception:
+    return "unknown"
+
+def get_openvino_genai_version():
+  try:
+    import openvino_genai
+    return str(openvino_genai.get_version())
+  except Exception:
+    return "unknown"
+
+print(get_openvino_version())
+print(get_openvino_genai_version())
+PY
+)
+
+OV_VERSION="${_VERS[0]:-unknown}"
+OV_GENAI_VERSION="${_VERS[1]:-unknown}"
+
+sanitize_tag() {
+  local value="$1"
+  echo "$(sed -E 's/[^A-Za-z0-9._-]+/-/g;s/-+/-/g;s/^-|-$//g' <<<"${value}")"
+}
+
+OV_VERSION_TAG="$(sanitize_tag "${OV_VERSION}")"
+OV_GENAI_VERSION_TAG="$(sanitize_tag "${OV_GENAI_VERSION}")"
+
+LOG_DIR="./logs.benchmark_${TS}__ov-${OV_VERSION_TAG}__genai-${OV_GENAI_VERSION_TAG}"
 mkdir -p "${LOG_DIR}"
 
 # Load configs (KV cache precision variants)
 LOAD_CONFIG_FP16='{"KV_CACHE_PRECISION":"f16"}'
-LOAD_CONFIG_I8='{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_TOKEN"}'
+LOAD_CONFIG_I8_BY_TOKEN='{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_TOKEN"}'
+LOAD_CONFIG_I8_BY_CHANNEL='{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_CHANNEL"}'
 
 ########################################
 # Helpers
@@ -96,9 +129,33 @@ run_and_log() {
   echo "[$(date +'%F %T')] Done. Log: ${logfile}"
 }
 
+  resolve_load_config() {
+    local kv_variant="$1"
+    case "${kv_variant}" in
+      fp16)
+        echo "${LOAD_CONFIG_FP16}"
+        ;;
+      i8_by_token)
+        echo "${LOAD_CONFIG_I8_BY_TOKEN}"
+        ;;
+      i8_by_channel)
+        echo "${LOAD_CONFIG_I8_BY_CHANNEL}"
+        ;;
+      *)
+        echo "Unknown KV variant: ${kv_variant}" >&2
+        return 1
+        ;;
+    esac
+  }
+
 ########################################
 # Main loop
 ########################################
+  echo "TS=${TS}"
+  echo "openvino_version=${OV_VERSION}"
+  echo "openvino_genai_version=${OV_GENAI_VERSION}"
+  echo "LOG_DIR=${LOG_DIR}"
+
 for model_dir in "${MODEL_DIRS[@]}"; do
   model_id="$(sanitize_id "${model_dir}")"
 
@@ -113,12 +170,8 @@ for model_dir in "${MODEL_DIRS[@]}"; do
     # ----------------------------
     # 1) Dense baseline (no sparse)
     # ----------------------------
-    for kv in "fp16" "i8"; do
-      if [[ "${kv}" == "fp16" ]]; then
-        load_cfg="${LOAD_CONFIG_FP16}"
-      else
-        load_cfg="${LOAD_CONFIG_I8}"
-      fi
+    for kv in "fp16" "i8_by_token" "i8_by_channel"; do
+      load_cfg="$(resolve_load_config "${kv}")"
 
       cfg_id="dense"
       FP_LOG="${LOG_DIR}/cm_pa.${kv}.${cfg_id}.${model_id}.${prompt_id}.${TS}.log"
@@ -147,12 +200,8 @@ for model_dir in "${MODEL_DIRS[@]}"; do
           '{"enable_prefix_caching":false,"max_num_batched_tokens":4096,"use_sparse_attention":true,"sparse_attention_config":{"mode":"XATTENTION","xattention_threshold":%s,"xattention_block_size":%s}}' \
           "$th" "$bs")
 
-        for kv in "fp16" "i8"; do
-          if [[ "${kv}" == "fp16" ]]; then
-            load_cfg="${LOAD_CONFIG_FP16}"
-          else
-            load_cfg="${LOAD_CONFIG_I8}"
-          fi
+        for kv in "fp16" "i8_by_token" "i8_by_channel"; do
+          load_cfg="$(resolve_load_config "${kv}")"
 
           cfg_id="xattn-${th}-bs${bs}"
           LOG_FILE="${LOG_DIR}/cm_pa.${kv}.${cfg_id}.${model_id}.${prompt_id}.${TS}.log"

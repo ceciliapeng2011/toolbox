@@ -17,21 +17,22 @@ run_llm_app() {
     # prompts_dir=$HOME/3rdparty/x-attention/eval/efficiency/xattn-102.jsonl
     # cb_config='{"enable_prefix_caching":false,"max_num_batched_tokens":4096,"use_sparse_attention":false}'
     cb_config='{"enable_prefix_caching":false,"max_num_batched_tokens":4096,"use_sparse_attention":true,"sparse_attention_config":{"mode":"XATTENTION","xattention_threshold":0.99,"xattention_block_size":256}}'
-    load_config='{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_TOKEN"}'
+    # load_config='{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_TOKEN"}'
+    load_config='{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_CHANNEL"}'
     # load_config='{"KV_CACHE_PRECISION":"f16"}'
 
 
-    python $HOME/openvino/large_context.py --use-sparse-xattention --xattn-block-size=256 --use-i8-kvcache
+    # python $HOME/openvino/large_context.py --use-sparse-xattention --xattn-block-size=256 --use-i8-kvcache
 
     # vtune -collect gpu-hotspots -knob characterization-mode=overview -knob collect-memory-bandwidth=true -knob analyze-power-usage=false -- \
     # CLI_InOrderQueue=1 CLI_LogToFile=1 CLI_DevicePerformanceTiming=1 cliloader --dump-dir ./report.clintercept.i8.block256.xattn0.99/ \
-    # python $HOME/openvino.genai/tools/llm_bench/benchmark.py -m $model_dir --disable_prompt_permutation -d GPU --cb_config $cb_config --load_config $load_config -pf $prompts_dir -n 0 --infer_count 1
+    python $HOME/openvino.genai/tools/llm_bench/benchmark.py -m $model_dir --disable_prompt_permutation -d GPU --cb_config $cb_config --load_config $load_config -pf $prompts_dir -n 0 --infer_count 10
 
     # gt_file="$HOME/llm_irs/AC_llm/wwb_ref_gt_data_cache/qwen3-8b__NAT/reference.csv"
     # # gt_file="reference.csv"
     # out_dir=./tmp.wwb/
     # mkdir -p "${out_dir}"
-    # wwb \
+    # python $HOME/openvino.genai/tools/who_what_benchmark/whowhatbench/wwb.py \
     # --target-model "$model_dir" \
     # --model-type "text" \
     # --long-prompt \

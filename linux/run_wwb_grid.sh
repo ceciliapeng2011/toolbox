@@ -6,6 +6,33 @@ IFS=$'\n\t'
 
 # chmod +x run_wwb_grid.sh
 # nohup bash ./run_wwb_grid.sh > run_wwb_grid.out 2>&1 &
+# examples:
+#   bash ./run_wwb_grid.sh                 # long-prompt OFF (default)
+#   bash ./run_wwb_grid.sh --long-prompt   # long-prompt ON
+#   bash ./run_wwb_grid.sh --no-long-prompt
+
+LONG_PROMPT=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --long-prompt)
+      LONG_PROMPT=true
+      ;;
+    --no-long-prompt)
+      LONG_PROMPT=false
+      ;;
+    -h|--help)
+      echo "Usage: $0 [--long-prompt|--no-long-prompt]"
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      echo "Usage: $0 [--long-prompt|--no-long-prompt]" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
 
 
 ############################################
@@ -17,7 +44,12 @@ MODEL_DIRS=(
   "$HOME/llm_irs/WW05_llm-optimum_2026.0.0-20947/phi-3-mini-128k-instruct/pytorch/ov/OV_FP16-4BIT_DEFAULT"
 )
 
-GT_DIR=$HOME/llm_irs/AC_llm/wwb_ref_gt_data_cache/
+if [[ "$LONG_PROMPT" == "true" ]]; then
+  GT_DIR="$HOME/llm_irs/AC_llm/wwb_ref_gt_data_cache_long_prompts/"
+else
+  GT_DIR="$HOME/llm_irs/AC_llm/wwb_ref_gt_data_cache/"
+fi
+
 GT_FILES=(
   "$GT_DIR/qwen3-8b__NAT/reference.csv"
   "$GT_DIR/minicpm4-8b__NAT/reference.csv"
@@ -41,6 +73,7 @@ CB_CONFIGS=(
 )
 
 OV_CONFIGS=(
+  '{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_CHANNEL"}'
   '{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_TOKEN"}'
   '{"KV_CACHE_PRECISION":"f16"}'
 )
@@ -56,8 +89,36 @@ export OPENVINO_LOG_LEVEL=4
 # Output roots
 ############################################
 TS="$(date +"%Y%m%d_%H%M%S")"
-LOG_ROOT="./logs.wwb_${TS}"
-OUTPUT_ROOT="./outputs.wwb_${TS}"   # change if you want a different root
+
+readarray -t _VERS < <(python - <<'PY'
+def ver_openvino():
+  try:
+    import openvino
+    return str(openvino.get_version())
+  except Exception:
+    return "unknown"
+
+def ver_openvino_genai():
+  try:
+    import openvino_genai
+    return str(openvino_genai.get_version())
+  except Exception:
+    return "unknown"
+
+print(ver_openvino())
+print(ver_openvino_genai())
+PY
+)
+
+OV_VERSION="${_VERS[0]:-unknown}"
+OV_GENAI_VERSION="${_VERS[1]:-unknown}"
+
+# Make version strings path-safe
+OV_VERSION_TAG="$(sed -E 's/[^A-Za-z0-9._-]+/-/g;s/-+/-/g;s/^-|-$//g' <<<"$OV_VERSION")"
+OV_GENAI_VERSION_TAG="$(sed -E 's/[^A-Za-z0-9._-]+/-/g;s/-+/-/g;s/^-|-$//g' <<<"$OV_GENAI_VERSION")"
+
+LOG_ROOT="./logs.wwb_${TS}__ov-${OV_VERSION_TAG}__genai-${OV_GENAI_VERSION_TAG}"
+OUTPUT_ROOT="./outputs.wwb_${TS}__ov-${OV_VERSION_TAG}__genai-${OV_GENAI_VERSION_TAG}"   # change if you want a different root
 
 mkdir -p "$OUTPUT_ROOT" "$LOG_ROOT"
 
@@ -169,11 +230,29 @@ cb_tag_from_json() {
   fi
 }
 
+# Return success (0) when xattention_threshold exists and is < 1.0, otherwise 1.
+cb_has_threshold_lt_one() {
+  local json="$1"
+  local thr
+  thr="$(sed -nE 's/.*"xattention_threshold"[[:space:]]*:[[:space:]]*([-0-9.]+).*/\1/p' <<<"$json")"
+
+  if [[ -z "$thr" ]]; then
+    return 1
+  fi
+
+  awk -v t="$thr" 'BEGIN { exit !(t + 0 < 1.0) }'
+}
+
 ############################################
 # Main loop
 ############################################
 
 RUN_TS="$(date +%Y%m%d_%H%M%S)"
+
+echo "long_prompt=${LONG_PROMPT}"
+echo "gt_dir=${GT_DIR}"
+echo "openvino_version=${OV_VERSION}"
+echo "openvino_genai_version=${OV_GENAI_VERSION}"
 
 for model_dir in "${MODEL_DIRS[@]}"; do
   if [[ ! -d "$model_dir" ]]; then
@@ -209,6 +288,11 @@ for model_dir in "${MODEL_DIRS[@]}"; do
     ov_tag="$(ov_tag_from_json "$ov_config")"
 
     for cb_config in "${CB_CONFIGS[@]}"; do
+      if [[ "$LONG_PROMPT" != "true" ]] && cb_has_threshold_lt_one "$cb_config"; then
+        echo "⏭️  Skip CB config (xattention_threshold < 1.0 while long-prompt is OFF)"
+        continue
+      fi
+
       cb_tag="$(cb_tag_from_json "$cb_config")"
 
       # Output dir & log name that clearly identify model / ov / cb
@@ -231,17 +315,23 @@ for model_dir in "${MODEL_DIRS[@]}"; do
       printf '%s\n' "$cb_config" > "${out_dir}/cb_config.json"
 
       # Execute
-      wwb \
-        --target-model "$model_dir" \
-        --model-type "$MODEL_TYPE" \
-        --long-prompt \
-        --genai \
-        --gt-data "$gt_file" \
-        --device GPU \
-        --cb-config "$cb_config" \
-        --ov-config "$ov_config" \
-        --output "$out_dir" \
-        >"$out_log" 2>&1
+      cmd=(
+        wwb
+        --target-model "$model_dir"
+        --model-type "$MODEL_TYPE"
+        --genai
+        --gt-data "$gt_file"
+        --device GPU
+        --cb-config "$cb_config"
+        --ov-config "$ov_config"
+        --output "$out_dir"
+      )
+
+      if [[ "$LONG_PROMPT" == "true" ]]; then
+        cmd+=(--long-prompt)
+      fi
+
+      "${cmd[@]}" >"$out_log" 2>&1
 
       echo "✅ Done: $model_name | $ov_tag | $cb_tag"
       echo

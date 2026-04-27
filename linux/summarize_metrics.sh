@@ -17,7 +17,7 @@
 # Notes:
 # - Requires gawk (for FPAT, ENDFILE, associative arrays).
 # - CSV parsing is quote-aware; handles BOM and CRLF.
-# - Context columns in summary: model_name, ov_variant, cb_variant, ...metrics..., rel_path
+# - Context columns in summary: long_prompt, model_name, ov_variant, cb_variant, ...metrics..., rel_path
 # - Failures compare sparse-xattention similarity to dense baseline (same group):
 #   Failure if: sparse_similarity <= dense_similarity - 0.1
 #   Dense matching: prefer same mtoks; else highest-sim dense in group.
@@ -28,6 +28,7 @@ ROOT_DIR="${1:-.}"
 echo $ROOT_DIR
 OUT_SUMMARY="${2:-metrics_summary.csv}"
 OUT_FAILURES="${3:-metrics_failures.csv}"
+ROOT_TAG="$(basename "$(realpath "$ROOT_DIR")")"
 
 # Ensure gawk is available
 if ! command -v gawk >/dev/null 2>&1; then
@@ -54,16 +55,24 @@ fi
   files=$(cat "$TMP_LIST")
   [ -z "$files" ] && { echo "No metrics.csv files found under: $ROOT_DIR" >&2; exit 0; }
 
-  gawk -v FAIL="$OUT_FAILURES" '
+  gawk -v FAIL="$OUT_FAILURES" -v ROOT_TAG="$ROOT_TAG" '
   BEGIN {
     FPAT = "([^,]*)|(\"[^\"]*\")"  # quote-aware CSV split
     OFS  = ","
 
+    root_long_prompt = "unknown"
+    if (ROOT_TAG ~ /(^|__)lp-on($|__)/) {
+      root_long_prompt = "on"
+    } else if (ROOT_TAG ~ /(^|__)lp-off($|__)/) {
+      root_long_prompt = "off"
+    }
+
     # Fixed context columns for summary
-    ctx_cols[1] = "model_name"
-    ctx_cols[2] = "ov_variant"
-    ctx_cols[3] = "cb_variant"
-    ctx_cols_count = 3
+    ctx_cols[1] = "long_prompt"
+    ctx_cols[2] = "model_name"
+    ctx_cols[3] = "ov_variant"
+    ctx_cols[4] = "cb_variant"
+    ctx_cols_count = 4
 
     file_idx = 0
     header_count = 0
@@ -132,6 +141,7 @@ fi
     rel   = FILENAME
 
     # Persist context
+    ctx_long_prompt[file_idx] = root_long_prompt
     ctx_model[file_idx] = model
     ctx_runts[file_idx] = runts
     ctx_ov[file_idx]    = ov
@@ -188,7 +198,8 @@ fi
     # Rows
     for (fi = 1; fi <= file_idx; fi++) {
       row = ""
-      row = row csv_escape(ctx_model[fi])
+      row = row csv_escape(ctx_long_prompt[fi])
+      row = row OFS csv_escape(ctx_model[fi])
       row = row OFS csv_escape(ctx_ov[fi])
       row = row OFS csv_escape(ctx_cb[fi])
 
@@ -203,7 +214,7 @@ fi
 
     # --------- Failures Output (to FAIL) ---------
     # Header for failures
-    fail_hdr = "model_name,run_ts,ov_variant,sparse_cb_variant,dense_cb_variant,sparse_rel_path,dense_rel_path,match_strategy,sparse_similarity,dense_similarity,delta"
+    fail_hdr = "long_prompt,model_name,run_ts,ov_variant,sparse_cb_variant,dense_cb_variant,sparse_rel_path,dense_rel_path,match_strategy,sparse_similarity,dense_similarity,delta"
     print fail_hdr > FAIL
 
     # Iterate groups
@@ -253,7 +264,8 @@ fi
         delta = sim[sfi] - sim[chosen_dfi]
         if (delta <= -0.1) {
           fail_row = ""
-          fail_row = fail_row csv_escape(ctx_model[sfi])
+          fail_row = fail_row csv_escape(ctx_long_prompt[sfi])
+          fail_row = fail_row OFS csv_escape(ctx_model[sfi])
           fail_row = fail_row OFS csv_escape(ctx_runts[sfi])
           fail_row = fail_row OFS csv_escape(ctx_ov[sfi])
           fail_row = fail_row OFS csv_escape(ctx_cb[sfi])

@@ -117,8 +117,14 @@ OV_GENAI_VERSION="${_VERS[1]:-unknown}"
 OV_VERSION_TAG="$(sed -E 's/[^A-Za-z0-9._-]+/-/g;s/-+/-/g;s/^-|-$//g' <<<"$OV_VERSION")"
 OV_GENAI_VERSION_TAG="$(sed -E 's/[^A-Za-z0-9._-]+/-/g;s/-+/-/g;s/^-|-$//g' <<<"$OV_GENAI_VERSION")"
 
-LOG_ROOT="./logs.wwb_${TS}__ov-${OV_VERSION_TAG}__genai-${OV_GENAI_VERSION_TAG}"
-OUTPUT_ROOT="./outputs.wwb_${TS}__ov-${OV_VERSION_TAG}__genai-${OV_GENAI_VERSION_TAG}"   # change if you want a different root
+if [[ "$LONG_PROMPT" == "true" ]]; then
+  LONG_PROMPT_TAG="lp-on"
+else
+  LONG_PROMPT_TAG="lp-off"
+fi
+
+LOG_ROOT="./logs.wwb_${TS}__${LONG_PROMPT_TAG}__ov-${OV_VERSION_TAG}__genai-${OV_GENAI_VERSION_TAG}"
+OUTPUT_ROOT="./outputs.wwb_${TS}__${LONG_PROMPT_TAG}__ov-${OV_VERSION_TAG}__genai-${OV_GENAI_VERSION_TAG}"   # change if you want a different root
 
 mkdir -p "$OUTPUT_ROOT" "$LOG_ROOT"
 

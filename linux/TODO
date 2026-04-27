@@ -1,5 +1,5 @@
 echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
-nohup bash ./../run_wwb_grid.sh > run_wwb_grid.out 2>&1 && bash ./../run.benchmark.sh > run.benchmark.out 2>&1
+nohup bash ./../run_wwb_grid.sh --long-prompt > run_wwb_grid.long_prompt.out 2>&1 && bash ./../run.benchmark.sh > run.benchmark.out 2>&1
 
 
 # 1. Change layout of kvcache block zp+scale, make them contiguous for better memory access pattern.

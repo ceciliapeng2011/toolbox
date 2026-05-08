@@ -22,3 +22,9 @@ cmake-build*
 logs.*
 outputs.*
 
+
+# test output folders
+linux/nightly_venv/
+linux/pr-*/
+linux/private_builds/
+

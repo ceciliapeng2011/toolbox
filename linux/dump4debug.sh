@@ -18,8 +18,8 @@ run_llm_app() {
     # cb_config='{"enable_prefix_caching":false,"max_num_batched_tokens":4096,"use_sparse_attention":false}'
     cb_config='{"enable_prefix_caching":false,"max_num_batched_tokens":4096,"use_sparse_attention":true,"sparse_attention_config":{"mode":"XATTENTION","xattention_threshold":0.99,"xattention_block_size":256}}'
     # load_config='{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_TOKEN"}'
-    load_config='{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_CHANNEL"}'
-    # load_config='{"KV_CACHE_PRECISION":"f16"}'
+    # load_config='{"KV_CACHE_PRECISION":"i8","KEY_CACHE_QUANT_MODE":"BY_CHANNEL"}'
+    load_config='{"KV_CACHE_PRECISION":"f16"}'
 
 
     # python $HOME/openvino/large_context.py --use-sparse-xattention --xattn-block-size=256 --use-i8-kvcache

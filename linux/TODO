@@ -1,6 +1,9 @@
 echo "performance" | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 nohup bash ./../run_wwb_grid.sh --long-prompt > run_wwb_grid.long_prompt.out 2>&1 && bash ./../run.benchmark.sh > run.benchmark.out 2>&1
+nohup bash benchmark_cb_3cases.sh --profile --output report.fp16.2 && bash benchmark_cb_3cases.sh --profile --output report.fp16.2 --backend cm --xattention_block_threshold 0.9 && bash benchmark_cb_3cases.sh --profile --output report.fp16.2 --backend cm --xattention_block_threshold 0.1
 
+export OV_GPU_CM_MIXED_ROUTE_MODE=split
+export OV_GPU_CM_PA_FORCE_LOCKABLE_MAPPING=1
 
 # 1. Change layout of kvcache block zp+scale, make them contiguous for better memory access pattern.
 # This improves 0.11 density performance by ~6%. from baseline:
